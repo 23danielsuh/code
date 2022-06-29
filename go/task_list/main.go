@@ -20,10 +20,10 @@ type model struct {
 func initialModel() model {
 	ti := textinput.New()
 	ti.Placeholder = "New task"
-	ti.CharLimit = 250
-	ti.Focus()
+	ti.CharLimit = 50
 	ti.Prompt = ""
-	ti.Width = 20
+	ti.Width = 50
+	ti.Focus()
 
 	return model{
 		tasks:          []string{},
@@ -39,15 +39,33 @@ func (m model) Init() tea.Cmd {
 }
 
 func mod(x, m int) int {
+    if m == 0 {
+        return 0
+    }
 	return (x%m + m) % m
 }
 func remove(slice []string, i int) []string {
+    if len(slice) == 0 || len(slice) == 1 {
+        return []string{}
+    }
 	copy(slice[i:], slice[i+1:])
 	return slice[:len(slice)-1]
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+    
+    /*
+    TODO:
+    deal with the case where task list is empty and you always want to add a task
+    make it so that hitting enter edits the text not deletes all of it
+    clean up code
+    */
+
+    if len(m.tasks) == 0 {
+        m.textInputFocus = true
+        m.textInput.Focus()
+    }
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -74,6 +92,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case "d":
 				m.tasks = remove(m.tasks, m.cursor)
+				m.cursor = mod(m.cursor, len(m.tasks))
 
 			case "enter":
 				m.editing = true
@@ -88,6 +107,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "ctrl+c", "q":
 				return m, tea.Quit
+
+            case "esc":
+				m.textInputFocus = false
+                m.editing = false
+				m.textInput.Reset()
+                return m, nil
 
 			case "enter":
 				if m.editing {
@@ -113,31 +138,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	allCompleted := true
 
-	s := "Task list (type o to add task):\n\n"
+	s := "Task list:\n\n"
 
-	for i, choice := range m.tasks {
-		if m.editing && i == m.cursor {
-			s += fmt.Sprintf("  [ ] %s\n", m.textInput.View())
-			continue
-		}
-		cursor := " "
-		if m.cursor == i && !m.textInputFocus {
-			cursor = ">"
-		}
+    for i, choice := range m.tasks {
+        if m.editing && i == m.cursor {
+            s += fmt.Sprintf("  [ ] %s\n", m.textInput.View())
+            allCompleted = false
+            continue
+        }
+        cursor := " "
+        if m.cursor == i && !m.textInputFocus {
+            cursor = ">"
+        }
 
-		checked := " "
-		if b := m.completed[i]; b {
-			checked = "x"
-		} else {
-			allCompleted = false
-		}
+        checked := " "
+        if b := m.completed[i]; b {
+            checked = "x"
+        } else {
+            allCompleted = false
+        }
 
-		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
-	}
+        s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
+    }
+
 	if m.textInputFocus && !m.editing {
 		s += fmt.Sprintf("  [ ] %s\n", m.textInput.View())
 	}
-	if allCompleted && (!m.textInputFocus || m.editing) {
+	if allCompleted && (!m.textInputFocus || m.editing) && len(m.tasks) > 0 {
 		s += fmt.Sprintf("\nAll tasks completed ✅")
 	} else {
 		s += fmt.Sprintln()
